@@ -4,7 +4,7 @@ The TURN Server project contains the source code of a TURN server and TURN clien
 messaging library. Also, some extra programs provided, for testing-only
 purposes.
 
-See the INSTALL file for the building instructions.
+See the docs/Build.md file for the building instructions.
 
 After the build, you will have the following binary images:
 
@@ -32,6 +32,12 @@ SYSTEMD
 If the systemd development library is available, then it will notify systemd about the server status.
 
 RUNNING THE TURN SERVER
+
+To run the coturn server as a daemon use:
+
+  $ turnserver -o
+
+Note that if you make any changes to the config file the server has to be restarted.
 
 Options note: turnserver has long and short option names, for most options.
 Some options have only long form, some options have only short form. Their syntax
@@ -102,7 +108,7 @@ User database settings:
 		"postgresql://username:password@hostname:port/databasename"
 		(for 9.x or newer Postgres).
 
-		See the INSTALL file for more explanations and examples.
+		See the docs/PostgreSQL.md file for more explanations and examples.
 
 		Also, see http://www.PostgreSQL.org for full PostgreSQL documentation.
 
@@ -114,7 +120,7 @@ User database settings:
 
 		"host=<host> dbname=<dbname> user=<db-user> password=<db-user-password> connect_timeout=<seconds> read_timeout=<seconds>"
 
-		See the INSTALL file for more explanations and examples.
+		See the docs/MySQL.md file for more explanations and examples.
 
 		Also, see http://www.mysql.org or http://mariadb.org
 		for full MySQL documentation.
@@ -137,7 +143,7 @@ User database settings:
 
 		"mongodb://username:password@host:port/database?options"
 
-		See the INSTALL file for more explanations and examples.
+		See the docs/Mongo.md file for more explanations and examples.
 
 		Also, see http://docs.mongodb.org/manual/
 		for full MongoDB documentation.
@@ -150,7 +156,7 @@ User database settings:
 
 		"ip=<ip-addr> dbname=<db-number> password=<db-password> connect_timeout=<seconds>"
 
-		See the INSTALL file for more explanations and examples.
+		See the docs/Redis.md file for more explanations and examples.
 
 		Also, see http://redis.io for full Redis documentation.
 
@@ -198,11 +204,14 @@ Flags:
 
 --dh1066		Use 1066 bits predefined DH TLS key. Default size of the key is 2066.
 
---no-tlsv1		Do not allow TLSv1/DTLSv1 protocol.
+--no-tlsv1		Set TLSv1_1/DTLSv1.2 as a minimum supported protocol version.
+				With openssl-1.0.2 and below, do not allow TLSv1.2/DTLSv1.2 protocols.
 
---no-tlsv1_1		Do not allow TLSv1.1 protocol.
+--no-tlsv1_1		Set TLSv1_2/DTLSv1.2 as a minimum supported protocol version.
+					With openssl-1.0.2 and below, do not allow TLSv1.1 protocol.
 
---no-tlsv1_2		Do not allow TLSv1.2/DTLSv1.2 protocol.
+--no-tlsv1_2		Set TLSv1_3/DTLSv1.2 as a minimum supported protocol version.
+					With openssl-1.0.2 and below, do not allow TLSv1.2/DTLSv1.2 protocols.
 
 --no-udp		Do not start UDP client listeners.
 
@@ -275,9 +284,18 @@ Flags:
 			check: across the session, all requests must have the same
 			main ORIGIN attribute value (if the ORIGIN was
 			initially used by the session).
- --prometheus		Enable prometheus metrics. By default it is
-			disabled. Would listen on port 9641 unther the path /metrics
-			also the path / on this port can be used as a health check
+
+--prometheus		Enable prometheus metrics. By default it is
+			disabled. Would listen on port 9641 under the path /metrics
+			also the path / on this port can be used as a health check. 
+			Unavailable on apt installations.
+			
+--prometheus-username-labels	Enable labeling prometheus traffic
+		metrics with client usernames. Labeling with client usernames is
+		disabled by default, because this may cause memory leaks when using
+		authentication with ephemeral usernames (e.g. TURN REST API).
+
+--prometheus-port	Prometheus listener port (Default: 9641).
 
 -h			Help.
 
@@ -468,7 +486,8 @@ Options with values:
 --pkey-pwd		If the private key file is encrypted, then this password to be used.
 
 --cipher-list		Allowed OpenSSL cipher list for TLS/DTLS connections.
-			Default value is "DEFAULT".
+			Default value is "DEFAULT" for TLS/DTLS versions up to TLSv1.2/DTLSv1.2,
+			and the library default ciphersuites for TLSv1.3.
 
 --CA-file		CA file in OpenSSL format.
 			Forces TURN server to verify the client SSL certificates.
@@ -566,9 +585,16 @@ Options with values:
 --proc-group		Group name to run the process. After the initialization, the turnserver process
 			will make an attempt to change the current group ID to that group.
 
--K, --keep-address-family		TURN server allocates address family according TURN
+-K, --keep-address-family			Deprecated and will be removed in favor of --allocation-default-address-family!!
+			TURN server allocates address family according TURN
 			Client <=> Server communication address family.
 			!! It breaks RFC6156 section-4.2 (violates default IPv4) !!
+
+-A --allocation-default-address-family=<ipv4|ipv6|keep> 		Default is IPv4
+			TURN server allocates address family according TURN client requested address family.
+			If address family not requested explicitly by the client, then it falls back to this default.
+			The standard RFC explicitly define that this default must be IPv4, 
+			so use other option values with care!
 
 --cli-ip		Local system IP address to be used for CLI management interface.
 			The turnserver process can be accessed for management with telnet,
@@ -592,10 +618,19 @@ Options with values:
 
 --web-admin-port=<port>  Web-admin server port. Default is 8080.
 --web-admin-listen-on-workers   Enable for web-admin server to listens on STUN/TURN workers STUN/TURN ports.
-			By default it is disabled for security resons!
+			By default it is disabled for security reasons!
 			(This behavior used to be the default behavior, and was enabled by default.)
 
 --ne=[1|2|3]		Set network engine type for the process (for internal purposes).
+--no-rfc5780		Disable RFC5780 (NAT behavior discovery).
+                    Originally, if there are more than one listener address from the same
+                    address family, then by default the NAT behavior discovery feature enabled.
+                    This option disables this original behavior, because the NAT behavior discovery
+                    adds attributes to response, and this increase the possibility of an amplification attack.
+                    Strongly encouraged to use this option to decrease gain factor in STUN binding responses.
+--no-stun-backward-compatibility		Disable handling old STUN Binding requests and disable MAPPED-ADDRESS attribute in binding response (use only the XOR-MAPPED-ADDRESS).
+--response-origin-only-with-rfc5780		Only send RESPONSE-ORIGIN attribute in binding response if RFC5780 is enabled.
+					
 
 ==================================
 
@@ -790,7 +825,7 @@ in a batch script). See the file turndb/testsqldbsetup.sql as an example.
 4) The same is true for MySQL database. The same schema file is applicable.
 The same considerations are applicable.
 
-5) The same is true for the Redis database, but the Redis database has aa different schema -
+5) The same is true for the Redis database, but the Redis database has a different schema -
 it can be found (in the form of explanation) in schema.userdb.redis.
 Also, in Redis you can store both "keys" and open passwords (for long term credentials) -
 the "open password" option is less secure but more convenient for low-security environments.
@@ -988,34 +1023,5 @@ https://groups.google.com/forum/?fromgroups=#!forum/turn-server-project-rfc5766-
 
   AUTHORS
 
-	Oleg Moskalenko <mom040267@gmail.com>
+	See the AUTHORS.md file in the coturn source distribution.
 
-	Gabor Kovesdan http://kovesdan.org/
-
-	Daniel Pocock http://danielpocock.com/
-
-	John Selbie (jselbie@gmail.com)
-
-	Lee Sylvester <lee@designrealm.co.uk>
-
-	Erik Johnston <erikj@openmarket.com>
-
-	Roman Lisagor <roman@demonware.net>
-
-	Vladimir Tsanev <tsachev@gmail.com>
-
-	Po-sheng Lin <personlin118@gmail.com>
-
-	Peter Dunkley <peter.dunkley@acision.com>
-
-	Mutsutoshi Yoshimoto <mutsutoshi.yoshimoto@mixi.co.jp>
-
-	Federico Pinna <fpinna@vivocha.com>
-
-	Bradley T. Hughes <bradleythughes@fastmail.fm>
-
-    Mihály Mészáros <misi@majd.eu>
-
-  ACTIVE MAINTAINERS
-
-	Mihály Mészáros <misi@majd.eu>

@@ -33,12 +33,15 @@
 #define __DBD_REDIS__
 
 #include "dbdriver.h"
+#include "hiredis_libevent2.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-const turn_dbdriver_t * get_redis_dbdriver(void);
+const turn_dbdriver_t *get_redis_dbdriver(void);
+redis_context_handle get_redis_async_connection(struct event_base *base, redis_stats_db_t *connection_string,
+                                                int delete_keys);
 
 #ifdef __cplusplus
 }
@@ -46,4 +49,3 @@ const turn_dbdriver_t * get_redis_dbdriver(void);
 
 #endif
 /// __DBD_REDIS__///
-
