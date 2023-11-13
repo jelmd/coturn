@@ -8,6 +8,11 @@ examples/ca/CA.pl
 .vscode
 .idea
 .vs/
+deb.vars
+pkginfo.lnf
+prototype.lnf
+prototype.lnf.log
+deb.lnf
 
 # This file is used to ignore files which are generated
 # ----------------------------------------------------------------------------
